@@ -37,35 +37,35 @@ import Cocoa
 /// Renders equation components and updates their rendered image and offset
 /// values.
 internal class Renderer: ObservableObject {
-  
+
   // MARK: Types
-  
+
   /// A set of values used to create an array of parsed component blocks.
   struct ParsingSource: Equatable {
-    
+
     /// The LaTeX input.
     let latex: String
-    
+
     /// Whether or not the HTML should be unencoded.
     let unencodeHTML: Bool
-    
+
     /// The parsing mode.
     let parsingMode: LaTeX.ParsingMode
   }
-  
+
   // MARK: Public properties
-  
+
   /// Whether or not the view's blocks have been rendered.
   @MainActor @Published var rendered: Bool = false
-  
+
   /// Whether or not the receiver is currently rendering.
   @MainActor @Published var isRendering: Bool = false
-  
+
   /// The rendered blocks.
   @MainActor @Published var blocks: [ComponentBlock] = []
-  
+
   // MARK: Private properties
-  
+
   /// The LaTeX input's parsed blocks.
   private var _parsedBlocks: [ComponentBlock]? = nil
   private var parsedBlocks: [ComponentBlock]? {
@@ -74,26 +74,26 @@ internal class Renderer: ObservableObject {
         return self?._parsedBlocks
       }
     }
-    
+
     set {
       parsedBlocksQueue.async(flags: .barrier) { [weak self] in
         self?._parsedBlocks = newValue
       }
     }
   }
-  
+
   /// The set of values used to create the parsed blocks.
   private var _parsingSource: ParsingSource? = nil
-  
+
   /// Queue for accessing parsed blocks.
   private var parsedBlocksQueue = DispatchQueue(label: "latexswiftui.renderer.parse")
-  
+
 }
 
 // MARK: Public methods
 
 extension Renderer {
-  
+
   /// Returns whether the view's components are cached.
   ///
   /// - Parameters:
@@ -120,7 +120,7 @@ extension Renderer {
       displayScale: displayScale,
       texOptions: texOptions)
   }
-  
+
   /// Renders the view's components synchronously.
   ///
   /// - Parameters:
@@ -129,9 +129,8 @@ extension Renderer {
   ///   - parsingMode: The `parsingMode` environment variable.
   ///   - processEscapes: The `processEscapes` environment variable.
   ///   - errorMode: The `errorMode` environment variable.
-  ///   - font: The `font` environment variable.
+  ///   - font: The `font environment` variable.
   ///   - displayScale: The `displayScale` environment variable.
-  ///   - renderingMode: The `renderingMode` environment variable.
   @MainActor func renderSync(
     latex: String,
     unencodeHTML: Bool,
@@ -142,28 +141,15 @@ extension Renderer {
     displayScale: CGFloat,
     renderingMode: SwiftUI.Image.TemplateRenderingMode
   ) -> [ComponentBlock] {
-    guard !isRendering else {
-      return []
-    }
-    guard !rendered else {
-      return blocks
-    }
-    isRendering = true
-    
     let texOptions = TeXInputProcessorOptions(processEscapes: processEscapes, errorMode: errorMode)
-    let renderedBlocks = render(
-      blocks: parseBlocks(latex: latex, unencodeHTML: unencodeHTML, parsingMode: parsingMode),
+    return render(
+      blocks: parsedBlocks(latex: latex, unencodeHTML: unencodeHTML, parsingMode: parsingMode),
       font: font,
       displayScale: displayScale,
       renderingMode: renderingMode,
       texOptions: texOptions)
-    
-    blocks = renderedBlocks
-    isRendering = false
-    rendered = true
-    return blocks
   }
-  
+
   /// Renders the view's components asynchronously.
   ///
   /// - Parameters:
@@ -193,7 +179,7 @@ extension Renderer {
     await MainActor.run {
       isRendering = true
     }
-    
+
     let texOptions = TeXInputProcessorOptions(processEscapes: processEscapes, errorMode: errorMode)
     let renderedBlocks = render(
       blocks: parseBlocks(latex: latex, unencodeHTML: unencodeHTML, parsingMode: parsingMode),
@@ -201,20 +187,20 @@ extension Renderer {
       displayScale: displayScale,
       renderingMode: renderingMode,
       texOptions: texOptions)
-    
+
     await MainActor.run {
       blocks = renderedBlocks
       isRendering = false
       rendered = true
     }
   }
-  
+
 }
 
 // MARK: Private methods
 
 extension Renderer {
-  
+
   /// Gets the LaTeX input's parsed blocks.
   ///
   /// - Parameters:
@@ -230,18 +216,18 @@ extension Renderer {
     if let parsedBlocks {
       return parsedBlocks
     }
-    
+
     let currentSource = ParsingSource(latex: latex, unencodeHTML: unencodeHTML, parsingMode: parsingMode)
     if let _parsedBlocks, _parsingSource == currentSource {
       return _parsedBlocks
     }
-    
+
     let blocks = Parser.parse(unencodeHTML ? latex.htmlUnescape() : latex, mode: parsingMode)
     parsedBlocks = blocks
     _parsingSource = currentSource
     return blocks
   }
-  
+
   /// Renders the view's component blocks.
   ///
   /// - Parameters:
@@ -267,7 +253,7 @@ extension Renderer {
           displayScale: displayScale,
           renderingMode: renderingMode,
           texOptions: texOptions)
-        
+
         newBlocks.append(ComponentBlock(components: newComponents))
       }
       catch {
@@ -276,10 +262,10 @@ extension Renderer {
         continue
       }
     }
-    
+
     return newBlocks
   }
-  
+
   /// Renders the components and stores the new images in a new set of
   /// components.
   ///
@@ -305,19 +291,19 @@ extension Renderer {
         renderedComponents.append(component)
         continue
       }
-      
+
       // Get the svg
       guard let svg = try getSVG(for: component, texOptions: texOptions) else {
         renderedComponents.append(component)
         continue
       }
-      
+
       // Get the image
       guard let image = getImage(for: svg, xHeight: xHeight, displayScale: displayScale, renderingMode: renderingMode) else {
         renderedComponents.append(Component(text: component.text, type: component.type, svg: svg))
         continue
       }
-      
+
       // Save the rendered component
       renderedComponents.append(Component(
         text: component.text,
@@ -329,11 +315,11 @@ extension Renderer {
         )
       ))
     }
-    
+
     // All done
     return renderedComponents
   }
-  
+
   /// Gets the component's SVG, if possible.
   ///
   /// The SVG cache is checked first.
@@ -351,17 +337,17 @@ extension Renderer {
       componentText: component.text,
       conversionOptions: component.conversionOptions,
       texOptions: texOptions)
-    
+
     // Do we have the SVG in the cache?
     if let svgData = Cache.shared.dataCacheValue(for: svgCacheKey) {
       return try SVG(data: svgData)
     }
-    
+
     // Make sure we have a MathJax instance!
     guard let mathjax = MathJax.svgRenderer else {
       return nil
     }
-    
+
     // Perform the TeX -> SVG conversion
     var conversionError: Error?
     let svgString = mathjax.tex2svg(
@@ -370,20 +356,20 @@ extension Renderer {
       conversionOptions: component.conversionOptions,
       inputOptions: texOptions,
       error: &conversionError)
-    
+
     // Check for a conversion error
     let errorText = try getErrorText(from: conversionError)
-    
+
     // Create the SVG
     let svg = try SVG(svgString: svgString, errorText: errorText)
-    
+
     // Set the SVG in the cache
     Cache.shared.setDataCacheValue(try svg.encoded(), for: svgCacheKey)
-    
+
     // Finish up
     return svg
   }
-  
+
   /// Gets the component's image, if possible.
   ///
   /// The image cache is checked first.
@@ -402,7 +388,7 @@ extension Renderer {
   ) -> SwiftUI.Image? {
     // Create our cache key
     let cacheKey = Cache.ImageCacheKey(svg: svg, xHeight: xHeight)
-    
+
     // Check the cache for an image
     if let image = Cache.shared.imageCacheValue(for: cacheKey) {
       return Image(image: image)
@@ -410,23 +396,23 @@ extension Renderer {
         .antialiased(true)
         .interpolation(.high)
     }
-    
+
     // Continue with getting the image
     let imageSize = svg.size(for: xHeight)
     guard let image = SwiftDraw.SVG(data: svg.data)?.rasterize(with: imageSize, scale: displayScale) else {
       return nil
     }
-    
+
     // Set the image in the cache
     Cache.shared.setImageCacheValue(image, for: cacheKey)
-    
+
     // Finish up
     return Image(image: image, scale: displayScale)
       .renderingMode(renderingMode)
       .antialiased(true)
       .interpolation(.high)
   }
-  
+
   /// Gets the error text from a possibly non-nil error.
   ///
   /// - Parameter error: The error.
@@ -440,7 +426,7 @@ extension Renderer {
     }
     return nil
   }
-  
+
   /// Determines and returns whether the blocks are in the renderer's cache.
   ///
   /// - Parameters:
@@ -459,11 +445,11 @@ extension Renderer {
         guard let svgData = Cache.shared.dataCacheValue(for: dataCacheKey) else {
           return false
         }
-        
+
         guard let svg = try? SVG(data: svgData) else {
           return false
         }
-        
+
         let xHeight = _Font.preferredFont(from: font).xHeight
         let imageCacheKey = Cache.ImageCacheKey(svg: svg, xHeight: xHeight)
         guard Cache.shared.imageCacheValue(for: imageCacheKey) != nil else {
@@ -473,5 +459,5 @@ extension Renderer {
     }
     return true
   }
-  
+
 }
